@@ -108,23 +108,67 @@ function alphaBBox(im) {
   return { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
 }
 
-// 清除 AI 图集格子分隔线：它们是不透明的浅灰细线，会被 alpha bbox 当成角色内容。
-// 只清理 bbox 边缘一圈的低饱和亮色像素，深色/彩色主体不受影响。
+// 清除 AI 生成图集自带的矩形边框线（横跨整幅的纯黑/浅灰横线或竖线）。
+// 关键：边框线是「横跨 bbox 几乎整宽/整高、且亮度均匀」的线，角色本体绝不会如此。
+// 逐行/逐列检测，命中才清除；绝不按固定像素宽度裁切——那会切掉头发、耳朵、脚。
 function cleanEdgeLines(src, box) {
-  // 无条件清除外圈：帧自带 AI 生成的黑色矩形边框（顶部常有一条残线，故留得更宽）
-  const topHard = 14, bottomHard = 6, sideHard = 8;
-  const softX = 10, softY = 8; // 再清一圈浅灰网格线
+  // 判断一整行/列是否是「边框线」：不透明像素横跨 >=90%，且亮度高度一致。
+  // 用 10%~90% 分位差而非极值差，避免线里混入的少数黑点把判定挤掉。
+  function spanOf(lums) {
+    lums.sort((a, b) => a - b);
+    const lo = lums[Math.floor(lums.length * 0.10)];
+    const hi = lums[Math.floor(lums.length * 0.90)];
+    return hi - lo;
+  }
+  function rowIsLine(y) {
+    const lums = [];
+    for (let x = box.x; x < box.x + box.w; x++) {
+      const p = (y * src.w + x) * 4;
+      if (src.data[p + 3] > 40) lums.push((src.data[p] + src.data[p + 1] + src.data[p + 2]) / 3);
+    }
+    return lums.length >= box.w * 0.9 && spanOf(lums) < 42;
+  }
+  function colIsLine(x) {
+    const lums = [];
+    for (let y = box.y; y < box.y + box.h; y++) {
+      const p = (y * src.w + x) * 4;
+      if (src.data[p + 3] > 40) lums.push((src.data[p] + src.data[p + 1] + src.data[p + 2]) / 3);
+    }
+    return lums.length >= box.h * 0.9 && spanOf(lums) < 42;
+  }
+  // 反复剥离：部分帧同时存在黑框 + 内层灰线；每轮重算边界，直到没有新线
+  for (let pass = 0; pass < 8; pass++) {
+    let changed = false;
+    for (let y = box.y; y < box.y + box.h; y++) {
+      if (rowIsLine(y)) {
+        for (let x = box.x; x < box.x + box.w; x++) src.data[(y * src.w + x) * 4 + 3] = 0;
+        changed = true;
+      }
+    }
+    for (let x = box.x; x < box.x + box.w; x++) {
+      if (colIsLine(x)) {
+        for (let y = box.y; y < box.y + box.h; y++) src.data[(y * src.w + x) * 4 + 3] = 0;
+        changed = true;
+      }
+    }
+    if (!changed) break;
+  }
+  // 清除孤立杂点：边框清理后常残留 1~2 个独立灰点，它们会把 alphaBBox 撑大，
+  // 导致角色在格子顶部/侧面出现一条线。孤立点 = 8 邻域内不透明邻居 <= 1。
   for (let y = box.y; y < box.y + box.h; y++) {
     for (let x = box.x; x < box.x + box.w; x++) {
-      const ex = Math.min(x - box.x, box.x + box.w - 1 - x);
-      const eyTop = y - box.y, eyBot = box.y + box.h - 1 - y;
-      if (ex < sideHard || eyTop < topHard || eyBot < bottomHard) { src.data[(y * src.w + x) * 4 + 3] = 0; continue; }
-      if (ex >= softX || eyTop >= softY || eyBot >= softY) continue;
       const p = (y * src.w + x) * 4;
-      if (src.data[p + 3] === 0) continue;
-      const hi = Math.max(src.data[p], src.data[p + 1], src.data[p + 2]);
-      const lo = Math.min(src.data[p], src.data[p + 1], src.data[p + 2]);
-      if (hi - lo < 34 && lo > 118) src.data[p + 3] = 0;
+      if (src.data[p + 3] <= 12) continue;
+      let neighbors = 0;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (!dx && !dy) continue;
+          const nx = x + dx, ny = y + dy;
+          if (nx < 0 || ny < 0 || nx >= src.w || ny >= src.h) continue;
+          if (src.data[(ny * src.w + nx) * 4 + 3] > 12) neighbors++;
+        }
+      }
+      if (neighbors <= 1) src.data[p + 3] = 0;
     }
   }
 }
