@@ -112,13 +112,30 @@ function alphaBBox(im) {
 // 关键：边框线是「横跨 bbox 几乎整宽/整高、且亮度均匀」的线，角色本体绝不会如此。
 // 逐行/逐列检测，命中才清除；绝不按固定像素宽度裁切——那会切掉头发、耳朵、脚。
 function cleanEdgeLines(src, box) {
-  // 判断一整行/列是否是「边框线」：不透明像素横跨 >=90%，且亮度高度一致。
-  // 用 10%~90% 分位差而非极值差，避免线里混入的少数黑点把判定挤掉。
+  // 判断一整行/列是否是「AI 边框线」：
+  //   1) 不透明像素横跨 >=90%，且亮度高度一致（10%~90% 分位差，容忍线里混入的少数黑点）；
+  //   2) 关键：线的外侧一行/列必须几乎全透明 —— 真正的边框线贴在 bbox 边缘、外侧是空的，
+  //      而角色自身的横行（如背面视角的纯黑后脑勺、衣服横纹）上下都有像素相连，外侧不空，
+  //      这样就不会再把角色的头/身体当成线误删。
   function spanOf(lums) {
     lums.sort((a, b) => a - b);
     const lo = lums[Math.floor(lums.length * 0.10)];
     const hi = lums[Math.floor(lums.length * 0.90)];
     return hi - lo;
+  }
+  function countOpaqueRow(y) {
+    let n = 0;
+    for (let x = box.x; x < box.x + box.w; x++) if (src.data[(y * src.w + x) * 4 + 3] > 40) n++;
+    return n;
+  }
+  function countOpaqueCol(x) {
+    let n = 0;
+    for (let y = box.y; y < box.y + box.h; y++) if (src.data[(y * src.w + x) * 4 + 3] > 40) n++;
+    return n;
+  }
+  function alphaAt(x, y) {
+    if (x < 0 || y < 0 || x >= src.w || y >= src.h) return 0;
+    return src.data[(y * src.w + x) * 4 + 3];
   }
   function rowIsLine(y) {
     const lums = [];
@@ -126,7 +143,12 @@ function cleanEdgeLines(src, box) {
       const p = (y * src.w + x) * 4;
       if (src.data[p + 3] > 40) lums.push((src.data[p] + src.data[p + 1] + src.data[p + 2]) / 3);
     }
-    return lums.length >= box.w * 0.9 && spanOf(lums) < 42;
+    if (lums.length < box.w * 0.9 || spanOf(lums) >= 42) return false;
+    // 外侧：离哪条 bbox 边更近就查那一侧
+    const outerY = (y - box.y) < (box.y + box.h - 1 - y) ? y - 1 : y + 1;
+    let outerCnt = 0;
+    for (let x = box.x; x < box.x + box.w; x++) if (alphaAt(x, outerY) > 40) outerCnt++;
+    return outerCnt < box.w * 0.3;
   }
   function colIsLine(x) {
     const lums = [];
@@ -134,7 +156,11 @@ function cleanEdgeLines(src, box) {
       const p = (y * src.w + x) * 4;
       if (src.data[p + 3] > 40) lums.push((src.data[p] + src.data[p + 1] + src.data[p + 2]) / 3);
     }
-    return lums.length >= box.h * 0.9 && spanOf(lums) < 42;
+    if (lums.length < box.h * 0.9 || spanOf(lums) >= 42) return false;
+    const outerX = (x - box.x) < (box.x + box.w - 1 - x) ? x - 1 : x + 1;
+    let outerCnt = 0;
+    for (let y = box.y; y < box.y + box.h; y++) if (alphaAt(outerX, y) > 40) outerCnt++;
+    return outerCnt < box.h * 0.3;
   }
   // 反复剥离：部分帧同时存在黑框 + 内层灰线；每轮重算边界，直到没有新线
   for (let pass = 0; pass < 8; pass++) {
@@ -171,6 +197,59 @@ function cleanEdgeLines(src, box) {
       if (neighbors <= 1) src.data[p + 3] = 0;
     }
   }
+  // 清除与主体不相连的低饱和灰色小簇（AI 网格线被剥离后残留的 2~5 像素碎段）。
+  // 判据刻意严格：必须是小、扁、灰、中亮、位于上半部、且不是最大连通域。
+  // 红色眼睛、蓝色眼泪、白色星星等都因高饱和/高亮而被排除，不会误伤。
+  {
+    const visited = new Uint8Array(src.w * src.h);
+    const clusters = [];
+    for (let y = box.y; y < box.y + box.h; y++) {
+      for (let x = box.x; x < box.x + box.w; x++) {
+        const start = y * src.w + x;
+        if (visited[start] || src.data[start * 4 + 3] <= 12) continue;
+        const stack = [start];
+        visited[start] = 1;
+        const cells = [];
+        let cnt = 0, minx = x, maxx = x, miny = y, maxy = y, satSum = 0, lumSum = 0;
+        while (stack.length) {
+          const cur = stack.pop(), cy = (cur / src.w) | 0, cx = cur - cy * src.w;
+          const p = cur * 4, r = src.data[p], g = src.data[p + 1], b = src.data[p + 2];
+          cells.push(cur); cnt++;
+          if (cx < minx) minx = cx;
+          if (cx > maxx) maxx = cx;
+          if (cy < miny) miny = cy;
+          if (cy > maxy) maxy = cy;
+          satSum += Math.max(r, g, b) - Math.min(r, g, b);
+          lumSum += (r + g + b) / 3;
+          for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+              if (!dx && !dy) continue;
+              const nx = cx + dx, ny = cy + dy;
+              if (nx < box.x || ny < box.y || nx >= box.x + box.w || ny >= box.y + box.h) continue;
+              const ni = ny * src.w + nx;
+              if (visited[ni] || src.data[ni * 4 + 3] <= 12) continue;
+              visited[ni] = 1;
+              stack.push(ni);
+            }
+          }
+        }
+        clusters.push({ cells, cnt, w: maxx - minx + 1, h: maxy - miny + 1,
+          miny, sat: satSum / cnt, lum: lumSum / cnt });
+      }
+    }
+    if (clusters.length > 1) {
+      let main = 0;
+      for (let i = 1; i < clusters.length; i++) if (clusters[i].cnt > clusters[main].cnt) main = i;
+      for (let i = 0; i < clusters.length; i++) {
+        if (i === main) continue;
+        const c = clusters[i];
+        if (c.cnt > box.w * box.h * 0.03 || c.h > 4 || c.w < 12) continue;
+        if (c.sat > 35 || c.lum > 210) continue;
+        if (c.miny > box.y + box.h * 0.5) continue;
+        for (const idx of c.cells) src.data[idx * 4 + 3] = 0;
+      }
+    }
+  }
 }
 
 // alpha 加权 box 缩放，避免透明黑边污染颜色
@@ -194,6 +273,63 @@ function scaleInto(src, box, dw, dh, dest, destW, ox, oy) {
         dest[p] = Math.round(r / a); dest[p + 1] = Math.round(g / a);
         dest[p + 2] = Math.round(b / a); dest[p + 3] = Math.round(a / n);
       } else dest[p + 3] = 0;
+    }
+  }
+}
+
+// 图集级：清除一格内与主体不相连的低饱和灰色小簇（缩放后分离的 AI 网格碎线）。
+// 只清：小、扁、灰、中亮、位于上半部、非最大簇；彩色/高亮特效（红眼、蓝眼泪、白星星）自动排除。
+function cleanCellFragments(buf, bufW, cellX, cellY) {
+  const visited = new Uint8Array(CELL_W * CELL_H);
+  const clusters = [];
+  const alphaAt = (x, y) => buf[((cellY + y) * bufW + cellX + x) * 4 + 3];
+  for (let y = 0; y < CELL_H; y++) {
+    for (let x = 0; x < CELL_W; x++) {
+      const start = y * CELL_W + x;
+      if (visited[start] || alphaAt(x, y) <= 12) continue;
+      const stack = [start];
+      visited[start] = 1;
+      const cells = [];
+      let cnt = 0, minx = x, maxx = x, miny = y, maxy = y, satSum = 0, lumSum = 0;
+      while (stack.length) {
+        const cur = stack.pop(), cy = (cur / CELL_W) | 0, cx = cur - cy * CELL_W;
+        const p = ((cellY + cy) * bufW + cellX + cx) * 4;
+        const r = buf[p], g = buf[p + 1], b = buf[p + 2];
+        cells.push(cur); cnt++;
+        if (cx < minx) minx = cx;
+        if (cx > maxx) maxx = cx;
+        if (cy < miny) miny = cy;
+        if (cy > maxy) maxy = cy;
+        satSum += Math.max(r, g, b) - Math.min(r, g, b);
+        lumSum += (r + g + b) / 3;
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            if (!dx && !dy) continue;
+            const nx = cx + dx, ny = cy + dy;
+            if (nx < 0 || ny < 0 || nx >= CELL_W || ny >= CELL_H) continue;
+            const ni = ny * CELL_W + nx;
+            if (visited[ni] || alphaAt(nx, ny) <= 12) continue;
+            visited[ni] = 1;
+            stack.push(ni);
+          }
+        }
+      }
+      clusters.push({ cells, cnt, w: maxx - minx + 1, h: maxy - miny + 1,
+        miny, sat: satSum / cnt, lum: lumSum / cnt });
+    }
+  }
+  if (clusters.length < 2) return;
+  let main = 0;
+  for (let i = 1; i < clusters.length; i++) if (clusters[i].cnt > clusters[main].cnt) main = i;
+  for (let i = 0; i < clusters.length; i++) {
+    if (i === main) continue;
+    const c = clusters[i];
+    if (c.cnt > CELL_W * CELL_H * 0.03 || c.h > 4 || c.w < 12) continue;
+    if (c.sat > 35 || c.lum > 210) continue;
+    if (c.miny > CELL_H * 0.5) continue;
+    for (const idx of c.cells) {
+      const x = idx % CELL_W, y = (idx / CELL_W) | 0;
+      buf[((cellY + y) * bufW + cellX + x) * 4 + 3] = 0;
     }
   }
 }
@@ -238,6 +374,11 @@ for (const [id, kind] of CHARS) {
         atlas[(y * atlasW + x0 + CELL_W - 1 - k) * 4 + 3] = 0;
       }
     }
+  }
+  // 图集级碎线清理：AI 网格线被剥离后，部分灰线要在缩放后才与角色分离，
+  // 因此在写文件前对每格再做一次「独立灰色小簇」清理（判据严格，不碰彩色特效）。
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < COLS; c++) cleanCellFragments(atlas, atlasW, c * CELL_W, r * CELL_H);
   }
   const file = path.join(OUT, id + '.png');
   writePNG(file, atlasW, atlasH, atlas);
