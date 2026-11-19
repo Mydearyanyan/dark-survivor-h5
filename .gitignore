@@ -3,3 +3,11 @@
 node_modules/
 .vscode/
 .idea/
+dist/
+check-shots/
+# 原始 AI 素材与中间产物体积较大，不入库；游戏运行只需要 assets/game-atlas/
+assets/anim/
+assets/sheets/
+assets/sprites/
+assets/sprites_raw/
+assets/*.png

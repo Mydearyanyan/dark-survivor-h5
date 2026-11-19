@@ -4,113 +4,150 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>暗夜幸存者</title>
+<title>校园大乱斗</title>
+<link rel="icon" href="data:,">
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  html, body { width: 100%; height: 100%; overflow: hidden; background: #0a0a12; font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; user-select: none; }
-  #game { display: block; width: 100%; height: 100%; touch-action: none; }
-
-  .overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; flex-direction: column; z-index: 10; }
-  .hidden { display: none !important; }
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { width:100%; height:100%; overflow:hidden; font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif; user-select:none; background:#dfe8dc; }
+  #game { display:block; width:100%; height:100%; touch-action:none; }
+  .overlay { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; flex-direction:column; z-index:10; }
+  .hidden { display:none !important; }
 
   /* 顶部 HUD */
-  #hud { position: absolute; top: 0; left: 0; right: 0; z-index: 5; pointer-events: none; padding: env(safe-area-inset-top) 0 0 0; }
-  #hud-top { display: flex; justify-content: center; gap: 18px; padding: 10px 14px 0; font-size: 13px; color: #cfd0e0; text-shadow: 0 1px 3px #000; }
-  #hud-top b { color: #fff; font-size: 15px; }
-  #timer { font-variant-numeric: tabular-nums; }
-  .bar-wrap { position: relative; margin: 6px 14px 0; height: 14px; background: rgba(0,0,0,.55); border: 1px solid rgba(255,255,255,.18); border-radius: 8px; overflow: hidden; }
-  .bar { position: absolute; inset: 0; width: 100%; transform-origin: left; transition: transform .12s linear; }
-  #hp-bar { background: linear-gradient(90deg,#e8434a,#ff7a5c); }
-  #exp-bar { background: linear-gradient(90deg,#3aa0ff,#7be0ff); }
-  .bar-label { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #fff; text-shadow: 0 1px 2px #000; letter-spacing: .5px; }
-  #exp-wrap { height: 8px; margin-top: 4px; }
-  #level-badge { position: absolute; left: 14px; top: 40px; font-size: 11px; color: #7be0ff; }
+  #hud { position:absolute; top:0; left:0; right:0; z-index:5; pointer-events:none; padding:env(safe-area-inset-top) 0 0 0; }
+  #hud-top { display:flex; justify-content:center; gap:16px; padding:9px 14px 0; font-size:13px; color:#26405c; text-shadow:0 1px 0 rgba(255,255,255,.7); font-weight:600; }
+  #hud-top b { color:#14293f; font-size:15px; }
+  .bar-wrap { position:relative; margin:6px 14px 0; height:15px; background:rgba(20,41,63,.28); border:1px solid rgba(255,255,255,.7); border-radius:9px; overflow:hidden; }
+  .bar { position:absolute; inset:0; width:100%; transform-origin:left; transition:transform .12s linear; }
+  #hp-bar { background:linear-gradient(90deg,#ef5350,#ff8a65); }
+  #exp-bar { background:linear-gradient(90deg,#42a5f5,#7dd3fc); }
+  .bar-label { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:10px; color:#fff; text-shadow:0 1px 2px rgba(0,0,0,.5); font-weight:700; }
+  #exp-wrap { height:8px; margin-top:4px; }
+  #level-badge { position:absolute; left:14px; top:38px; font-size:11px; color:#1565c0; font-weight:800; }
+  #boss-wrap { position:absolute; left:50%; transform:translateX(-50%); top:80px; width:min(72vw,420px); text-align:center; }
+  #boss-name { font-size:12px; font-weight:800; color:#b71c1c; text-shadow:0 1px 0 #fff; margin-bottom:2px; }
+  #boss-bar-bg { height:10px; background:rgba(20,20,20,.45); border:1px solid rgba(255,255,255,.6); border-radius:6px; overflow:hidden; }
+  #boss-bar { height:100%; width:100%; transform-origin:left; background:linear-gradient(90deg,#d32f2f,#ff7043); }
+  #boss-wrap.enraged #boss-bar { background:linear-gradient(90deg,#8e0000,#ff1744); animation:pulse .6s infinite alternate; }
+  @keyframes pulse { to { filter:brightness(1.5); } }
 
-  /* 武器/被动图标栏 */
-  #skills { position: absolute; left: 10px; top: 92px; z-index: 5; display: flex; flex-direction: column; gap: 6px; pointer-events: none; }
-  .skill-chip { display: flex; align-items: center; gap: 4px; background: rgba(10,12,24,.7); border: 1px solid rgba(255,255,255,.2); border-radius: 8px; padding: 3px 6px 3px 4px; }
-  .skill-chip .ic { width: 24px; height: 24px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 14px; }
-  .skill-chip .lv { font-size: 10px; color: #ffd76a; font-weight: bold; }
+  /* 技能图标栏 */
+  #skills { position:absolute; left:10px; top:96px; z-index:5; display:flex; flex-direction:column; gap:5px; pointer-events:none; }
+  .skill-chip { display:flex; align-items:center; gap:4px; background:rgba(255,253,245,.85); border:1px solid rgba(30,60,90,.3); border-radius:8px; padding:2px 6px 2px 3px; box-shadow:0 2px 6px rgba(0,0,0,.12); }
+  .skill-chip .ic { width:22px; height:22px; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:13px; }
+  .skill-chip .lv { font-size:10px; color:#d84315; font-weight:800; }
 
-  /* 按钮通用 */
-  .btn { appearance: none; border: none; cursor: pointer; font-family: inherit; font-size: 16px; font-weight: 600; color: #fff; padding: 13px 34px; border-radius: 12px; background: linear-gradient(180deg,#5b8cff,#3457d5); box-shadow: 0 6px 18px rgba(52,87,213,.45); transition: transform .08s, filter .15s; }
-  .btn:active { transform: translateY(2px) scale(.98); filter: brightness(1.1); }
-  .btn.ghost { background: rgba(255,255,255,.1); box-shadow: none; border: 1px solid rgba(255,255,255,.25); }
+  /* 按钮 */
+  .btn { appearance:none; border:none; cursor:pointer; font-family:inherit; font-size:16px; font-weight:700; color:#fff; padding:13px 32px; border-radius:13px; background:linear-gradient(180deg,#5aa9f8,#2572d5); box-shadow:0 5px 0 #18529e,0 8px 16px rgba(20,60,110,.3); transition:transform .08s,box-shadow .08s; }
+  .btn:active { transform:translateY(4px); box-shadow:0 1px 0 #18529e; }
+  .btn.ghost { background:rgba(255,255,255,.85); color:#234a72; box-shadow:0 4px 0 #b8cbdc; border:1px solid #aac3d8; }
+  .btn.small { font-size:13px; padding:9px 18px; box-shadow:0 4px 0 #18529e; }
 
-  /* 面板 */
-  .panel { background: linear-gradient(160deg,rgba(24,26,44,.97),rgba(14,15,28,.97)); border: 1px solid rgba(255,255,255,.14); border-radius: 18px; padding: 30px 28px; width: min(90vw,430px); text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,.6); }
-  .title { font-size: 34px; font-weight: 800; letter-spacing: 2px; background: linear-gradient(90deg,#ff6a6a,#ffd76a,#6affc0); -webkit-background-clip: text; background-clip: text; color: transparent; margin-bottom: 6px; }
-  .subtitle { font-size: 13px; color: #9a9cb5; margin-bottom: 22px; line-height: 1.7; }
-  .big-num { font-size: 30px; color: #ffd76a; font-weight: 800; margin: 6px 0; }
+  /* 面板：纸张风格 */
+  .panel { background:linear-gradient(160deg,#fffdf4,#f2f6ef); border:3px solid #3c6b95; border-radius:20px; padding:26px 24px; width:min(92vw,460px); text-align:center; box-shadow:0 8px 0 rgba(40,80,120,.25),0 22px 50px rgba(20,40,60,.3); }
+  .title { font-size:34px; font-weight:900; letter-spacing:2px; color:#e64a3b; text-shadow:2px 2px 0 #fff,4px 4px 0 rgba(60,100,140,.25); margin-bottom:8px; }
+  .subtitle { font-size:13px; color:#54708a; margin-bottom:18px; line-height:1.7; }
+  .big-num { font-size:30px; color:#e65100; font-weight:900; margin:6px 0; }
+  .hint { font-size:11px; color:#78909c; margin-top:12px; line-height:1.7; }
+  .row { display:flex; gap:10px; justify-content:center; margin-top:16px; flex-wrap:wrap; }
+
+  /* 角色选择 */
+  #hero-select .panel { width:min(95vw,680px); }
+  #hero-cards { display:flex; flex-wrap:wrap; gap:10px; justify-content:center; margin:14px 0 4px; }
+  .hero-card { width:calc(33.33% - 7px); min-width:118px; max-width:150px; background:#fff; border:2px solid #c8d9e6; border-radius:14px; padding:10px 6px 9px; cursor:pointer; transition:transform .12s,border-color .12s,background .12s; }
+  .hero-card:active { transform:scale(.95); }
+  .hero-card:hover { border-color:#4aa3e8; background:#f0f9ff; }
+  .hero-card canvas { display:block; margin:0 auto 4px; image-rendering:auto; }
+  .hero-card .hn { font-size:14px; font-weight:900; color:#234a72; }
+  .hero-card .hs { font-size:11px; font-weight:700; color:#e65100; margin:2px 0; }
+  .hero-card .hd { font-size:10px; color:#6b8299; line-height:1.4; min-height:28px; }
+
+  /* 开场对白 */
+  #intro { justify-content:flex-end; padding-bottom:22vh; background:linear-gradient(180deg,transparent 40%,rgba(10,25,40,.35)); }
+  #intro-box { background:rgba(14,30,48,.88); border:2px solid rgba(255,255,255,.5); border-radius:14px; padding:16px 24px; max-width:86vw; color:#fff; font-size:16px; line-height:1.7; text-align:center; box-shadow:0 8px 24px rgba(0,0,0,.3); }
+  #intro-box small { display:block; font-size:11px; color:#9fd0ff; margin-top:8px; }
 
   /* 升级选择 */
-  #levelup-panel { width: min(94vw,560px); }
-  #levelup-panel .title { font-size: 24px; background: linear-gradient(90deg,#7be0ff,#a78bfa); -webkit-background-clip: text; background-clip: text; }
-  .cards { display: flex; gap: 10px; margin-top: 18px; justify-content: center; flex-wrap: wrap; }
-  .card { flex: 1 1 150px; max-width: 170px; min-width: 130px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.18); border-radius: 14px; padding: 16px 10px; cursor: pointer; transition: transform .12s, border-color .12s, background .12s; }
-  .card:active { transform: scale(.96); }
-  .card:hover { border-color: #7be0ff; background: rgba(123,224,255,.1); }
-  .card .ic { width: 48px; height: 48px; margin: 0 auto 10px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 26px; }
-  .card .nm { font-size: 15px; font-weight: 700; color: #fff; margin-bottom: 5px; }
-  .card .ds { font-size: 11px; color: #a8aabd; line-height: 1.5; min-height: 46px; }
-  .card .lvtag { font-size: 10px; color: #ffd76a; margin-top: 6px; }
+  #levelup .panel { width:min(96vw,680px); }
+  #levelup .title { font-size:24px; color:#1565c0; }
+  .cards { display:flex; gap:9px; margin-top:16px; justify-content:center; flex-wrap:wrap; }
+  .card { flex:1 1 145px; max-width:175px; min-width:125px; background:#fff; border:2px solid #d3e2ed; border-radius:14px; padding:12px 9px; cursor:pointer; transition:transform .12s,border-color .12s; }
+  .card:active { transform:scale(.95); }
+  .card:hover { border-color:#4aa3e8; }
+  .card .ic { width:44px; height:44px; margin:0 auto 8px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:24px; }
+  .card .nm { font-size:14px; font-weight:800; color:#234a72; margin-bottom:4px; }
+  .card .ds { font-size:11px; color:#60788d; line-height:1.45; min-height:44px; }
+  .card .lvtag { font-size:10px; color:#e65100; font-weight:800; margin-top:6px; }
 
-  /* 暂停按钮 */
-  #pause-btn { position: absolute; right: 14px; top: 40px; z-index: 6; width: 38px; height: 38px; border-radius: 10px; background: rgba(10,12,24,.7); border: 1px solid rgba(255,255,255,.22); color: #fff; font-size: 16px; cursor: pointer; }
+  /* 暂停/按钮位置 */
+  #pause-btn,#mute-btn { position:absolute; right:12px; z-index:6; width:38px; height:38px; border-radius:10px; background:rgba(255,253,245,.85); border:1px solid rgba(30,60,90,.35); color:#234a72; font-size:16px; cursor:pointer; box-shadow:0 2px 6px rgba(0,0,0,.12); }
+  #pause-btn { top:calc(40px + env(safe-area-inset-top)); }
+  #mute-btn { top:calc(84px + env(safe-area-inset-top)); }
 
   /* 虚拟摇杆 */
-  #joystick { position: absolute; z-index: 6; left: 0; bottom: 0; width: 100%; height: 45%; pointer-events: none; }
-  #joy-base { position: absolute; width: 108px; height: 108px; border-radius: 50%; background: rgba(255,255,255,.06); border: 2px solid rgba(255,255,255,.25); opacity: 0; transition: opacity .15s; }
-  #joy-knob { position: absolute; width: 46px; height: 46px; border-radius: 50%; background: rgba(123,224,255,.55); border: 2px solid rgba(255,255,255,.5); opacity: 0; transition: opacity .15s; }
+  #joystick { position:absolute; z-index:6; left:0; bottom:0; width:100%; height:45%; pointer-events:none; }
+  #joy-base { position:absolute; width:108px; height:108px; border-radius:50%; background:rgba(255,255,255,.22); border:2px solid rgba(30,60,90,.35); opacity:0; transition:opacity .15s; }
+  #joy-knob { position:absolute; width:46px; height:46px; border-radius:50%; background:rgba(74,163,232,.7); border:2px solid rgba(255,255,255,.8); opacity:0; transition:opacity .15s; }
 
-  .hint { font-size: 11px; color: #7d7f96; margin-top: 14px; line-height: 1.7; }
-  .row { display: flex; gap: 10px;justify-content:center; margin-top: 16px; flex-wrap: wrap; }
-  #toast { position: absolute; top: 22%; left: 0; right: 0; text-align: center; z-index: 8; pointer-events: none; }
-  #toast span { display: inline-block; background: rgba(0,0,0,.6); color: #ffd76a; font-size: 20px; font-weight: 700; padding: 8px 20px; border-radius: 20px; opacity: 0; transition: opacity .3s, transform .3s; transform: translateY(10px); }
-  #toast span.show { opacity: 1; transform: translateY(0); }
-  .mute { position:absolute; right:14px; top:86px; z-index:6; width:38px;height:38px;border-radius:10px;background:rgba(10,12,24,.7);border:1px solid rgba(255,255,255,.22);color:#fff;font-size:16px;cursor:pointer; }
+  #toast { position:absolute; top:20%; left:0; right:0; text-align:center; z-index:8; pointer-events:none; }
+  #toast span { display:inline-block; background:rgba(20,40,60,.85); color:#ffd76a; font-size:20px; font-weight:800; padding:8px 20px; border-radius:20px; opacity:0; transition:opacity .3s,transform .3s; transform:translateY(10px); border:1px solid rgba(255,255,255,.35); }
+  #toast span.show { opacity:1; transform:translateY(0); }
+  #broadcast { font-size:13px; color:#455a64; background:#e8f4ff; border-left:4px solid #42a5f5; padding:10px 12px; border-radius:6px; margin:12px 0; text-align:left; line-height:1.6; }
 </style>
 </head>
 <body>
 <canvas id="game"></canvas>
 
 <div id="hud" class="hidden">
-  <div id="hud-top"><span>⏱ <b id="timer">00:00</b></span><span>💀 <b id="kills">0</b></span><span>⭐ <b id="level">1</b></span></div>
+  <div id="hud-top"><span>⏱ <b id="timer">00:00</b></span><span>✊ <b id="kills">0</b></span><span>⭐ <b id="level">1</b></span></div>
   <div class="bar-wrap"><div class="bar" id="hp-bar"></div><div class="bar-label" id="hp-label">100 / 100</div></div>
   <div class="bar-wrap" id="exp-wrap"><div class="bar" id="exp-bar"></div></div>
   <div id="level-badge">LV.1</div>
+  <div id="boss-wrap" class="hidden"><div id="boss-name">班主任</div><div id="boss-bar-bg"><div id="boss-bar"></div></div></div>
 </div>
 <button id="pause-btn" class="hidden">⏸</button>
-<button id="mute-btn" class="mute hidden">🔊</button>
+<button id="mute-btn" class="hidden">🔊</button>
 <div id="skills"></div>
-
-<div id="joystick" class="hidden">
-  <div id="joy-base"></div><div id="joy-knob"></div>
-</div>
-
+<div id="joystick" class="hidden"><div id="joy-base"></div><div id="joy-knob"></div></div>
 <div id="toast"><span></span></div>
 
 <!-- 主菜单 -->
 <div id="menu" class="overlay">
   <div class="panel">
-    <div class="title">暗夜幸存者</div>
-    <div class="subtitle">在无尽的怪物潮中活下去<br>自动攻击 · 走位躲避 · 升级变强</div>
-    <button class="btn" id="start-btn">开始游戏</button>
-    <div class="row"><button class="btn ghost" id="how-btn" style="font-size:13px;padding:9px 18px;">玩法说明</button></div>
-    <div class="hint">最高存活：<b id="best-time" style="color:#ffd76a">00:00</b> ｜ 最高击杀：<b id="best-kills" style="color:#ffd76a">0</b></div>
+    <div class="title">校园大乱斗</div>
+    <div class="subtitle">全校被「纪律因子」洗脑了！<br>拿起文具，打醒同学们，活到放学！</div>
+    <button class="btn" id="start-btn">开始战斗</button>
+    <div class="row"><button class="btn ghost small" id="how-btn">玩法说明</button></div>
+    <div class="hint">最高存活 <b id="best-time" style="color:#e65100">00:00</b> ｜ 最高击杀 <b id="best-kills" style="color:#e65100">0</b></div>
   </div>
+</div>
+
+<!-- 角色选择 -->
+<div id="hero-select" class="overlay hidden">
+  <div class="panel">
+    <div class="title" style="font-size:26px">选择你的角色</div>
+    <div class="subtitle">每人都有专属技能，选一个顺眼的开始吧</div>
+    <div id="hero-cards"></div>
+    <div class="row"><button class="btn ghost small" id="hero-back">返回</button></div>
+  </div>
+</div>
+
+<!-- 开场对白 -->
+<div id="intro" class="overlay hidden">
+  <div id="intro-box"><span id="intro-text"></span><small>点击或按任意键继续</small></div>
 </div>
 
 <!-- 玩法说明 -->
 <div id="how" class="overlay hidden">
   <div class="panel">
-    <div class="title" style="font-size:24px;background:linear-gradient(90deg,#7be0ff,#a78bfa);-webkit-background-clip:text;background-clip:text;">玩法说明</div>
-    <div class="subtitle" style="text-align:left;font-size:13px;color:#c8cad9;">
-      • <b>移动</b>：电脑用 WASD / 方向键；手机用屏幕左下方虚拟摇杆<br><br>
-      • <b>攻击</b>：全自动，武器会自动攻击附近的敌人<br><br>
-      • <b>升级</b>：拾取敌人掉落的蓝色经验珠，升级时从 3 个强化中任选 1 个<br><br>
-      • <b>生存</b>：怪物会越来越多、越来越强，每 60 秒出现一次 Boss<br><br>
-      • <b>目标</b>：活得更久，击杀更多，挑战最高纪录！
+    <div class="title" style="font-size:24px;color:#1565c0">玩法说明</div>
+    <div class="subtitle" style="text-align:left;font-size:13px;color:#4a6076;">
+      • <b>移动</b>：电脑 WASD / 方向键；手机左下角虚拟摇杆<br><br>
+      • <b>攻击</b>：全自动，武器自动攻击附近敌人<br><br>
+      • <b>升级</b>：捡起经验珠，升级时从 3~4 个强化中任选 1 个<br><br>
+      • <b>敌人</b>：被洗脑的同学老师，打倒后就会恢复神志<br><br>
+      • <b>BOSS</b>：5 分钟班主任、10 分钟教导主任，残血会狂暴<br><br>
+      • <b>目标</b>：击倒两位主任，等到放学！
     </div>
     <button class="btn" id="how-back">知道了</button>
   </div>
@@ -118,33 +155,36 @@
 
 <!-- 升级选择 -->
 <div id="levelup" class="overlay hidden">
-  <div class="panel" id="levelup-panel">
+  <div class="panel">
     <div class="title">⭐ 升级！选择一项强化</div>
     <div class="cards" id="cards"></div>
+    <div class="row"><button class="btn ghost small hidden" id="reroll-btn">🔄 刷新（剩 1 次）</button></div>
   </div>
 </div>
 
 <!-- 暂停 -->
 <div id="paused" class="overlay hidden">
   <div class="panel">
-    <div class="title" style="font-size:26px;background:linear-gradient(90deg,#fff,#9aa);-webkit-background-clip:text;background-clip:text;">已暂停</div>
-    <button class="btn" id="resume-btn">继续游戏</button>
-    <div class="row"><button class="btn ghost" id="quit-btn" style="font-size:13px;padding:9px 18px;">返回主菜单</button></div>
+    <div class="title" style="font-size:26px;color:#1565c0">课间休息</div>
+    <button class="btn" id="resume-btn">继续战斗</button>
+    <div class="row"><button class="btn ghost small" id="quit-btn">返回主菜单</button></div>
   </div>
 </div>
 
-<!-- 游戏结束 -->
+<!-- 结算 -->
 <div id="gameover" class="overlay hidden">
   <div class="panel">
-    <div class="title" style="font-size:28px;">你倒下了</div>
+    <div class="title" id="result-title" style="font-size:28px;">今天先到这里</div>
     <div class="subtitle">存活时间</div>
     <div class="big-num" id="final-time">00:00</div>
-    <div class="subtitle" style="margin:4px 0 0;">击杀数 <b id="final-kills" style="color:#fff;font-size:18px;">0</b> ｜ 等级 <b id="final-level" style="color:#fff;font-size:18px;">1</b></div>
-    <div id="newrecord" class="hint hidden" style="color:#ffd76a;font-size:14px;">🎉 新纪录！</div>
+    <div class="subtitle" style="margin:4px 0 0;">击倒 <b id="final-kills" style="color:#234a72;font-size:18px;">0</b> 人 ｜ 等级 <b id="final-level" style="color:#234a72;font-size:18px;">1</b></div>
+    <div id="broadcast">📢 今日校园播报：……</div>
+    <div id="newrecord" class="hint hidden" style="color:#e65100;font-size:14px;">🎉 新纪录！</div>
     <div class="row"><button class="btn" id="retry-btn">再来一局</button><button class="btn ghost" id="home-btn">主菜单</button></div>
   </div>
 </div>
 
+<script src="assets/game-atlas/manifest.js"></script>
 <script src="game.js"></script>
 </body>
 </html>
