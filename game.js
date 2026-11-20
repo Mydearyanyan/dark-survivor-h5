@@ -19,6 +19,8 @@
   const INVULN_TIME = 0.8;
   // 老师粉笔弹道速度：原来的 0.6 倍（250 → 150），飞行更慢、更易看清躲避。
   const ENEMY_CHALK_SPEED = 150;
+  // 怪物移动速度总倍率：现有速度的 0.7 倍（含 BOSS；狂暴仍在此基础上叠乘）。
+  const ENEMY_SPEED_MUL = 0.7;
   // 角色视觉缩放：让角色可见高度 ≈ 屏幕高度的 1/10（自适应屏幕）。
   // 图集单格高 112px，其中角色可见部分约占 85%，故绘制缩放 = H / (10 × 112 × 0.85) ≈ H/952。
   const CELL_H = 112;
@@ -275,7 +277,7 @@
     const scale = 1 + G.time / 300;
     const hp = Math.round(t.hp * (t.boss ? 1 : scale));
     G.enemies.push({
-      type, x, y, r: t.r * VIS, hp, maxhp: hp, speed: t.speed, dmg: t.dmg, exp: t.exp,
+      type, x, y, r: t.r * VIS, hp, maxhp: hp, speed: t.speed * ENEMY_SPEED_MUL, dmg: t.dmg, exp: t.exp,
       boss: t.boss || 0, behavior: t.behavior || 'boss', atlas: t.atlas,
       dir: 'down', hurtT: 0, atkT: 0, atkCd: rand(.5, t.atkCd || 2),
       moving: false, phase: rand(0, TAU), flash: 0, hitCd: 0,
@@ -596,10 +598,15 @@
       spawnEnemy(type);
       if (G.time > 45 && Math.random() < .4) {
         const n = randInt(3, 6);
-        for (let i = 0; i < n; i++) spawnEnemy('xiaopihai', {
-          x: G.player.x + Math.cos(i / n * TAU) * 210,
-          y: G.player.y + Math.sin(i / n * TAU) * 210
-        });
+        // 整群小屁孩聚在同一处出现：只在主角周围随机选一个方向定一个点，
+        // 不再沿圆周环形分布把主角围住。点内加极小抖动，避免完全重叠成一个。
+        const a = rand(0, TAU);
+        const cx = G.player.x + Math.cos(a) * 210;
+        const cy = G.player.y + Math.sin(a) * 210;
+        for (let i = 0; i < n; i++) {
+          const ja = rand(0, TAU), jr = rand(0, 18);
+          spawnEnemy('xiaopihai', { x: cx + Math.cos(ja) * jr, y: cy + Math.sin(ja) * jr });
+        }
       }
     }
     if (G.time >= G.nextBoss1 && !G.enemies.some(e => e.type === 'banzhuren' && !e.dead)) {
