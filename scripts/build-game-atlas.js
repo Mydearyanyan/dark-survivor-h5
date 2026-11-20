@@ -162,6 +162,41 @@ function cleanEdgeLines(src, box) {
     for (let y = box.y; y < box.y + box.h; y++) if (alphaAt(outerX, y) > 40) outerCnt++;
     return outerCnt < box.h * 0.3;
   }
+  // 大块纯白背景清除函数（侧面真方向帧带白底）。见下方说明。
+  function clearWhiteBackgrounds() {
+    const isWhite = (x, y) => {
+      const p = (y * src.w + x) * 4;
+      if (src.data[p + 3] < 20) return false;
+      const r = src.data[p], g = src.data[p + 1], b = src.data[p + 2];
+      return r > 222 && g > 222 && b > 222 && (Math.max(r, g, b) - Math.min(r, g, b)) < 20;
+    };
+    const seen = new Uint8Array(src.w * src.h);
+    const areaThreshold = box.w * box.h * 0.08;
+    for (let y = box.y; y < box.y + box.h; y++) {
+      for (let x = box.x; x < box.x + box.w; x++) {
+        const start = y * src.w + x;
+        if (seen[start] || !isWhite(x, y)) continue;
+        const stack = [start]; seen[start] = 1;
+        const cells = [];
+        while (stack.length) {
+          const cur = stack.pop(), cy = (cur / src.w) | 0, cx = cur - cy * src.w;
+          cells.push(cur);
+          for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+              const nx = cx + dx, ny = cy + dy;
+              if (nx < box.x || ny < box.y || nx >= box.x + box.w || ny >= box.y + box.h) continue;
+              const ni = ny * src.w + nx;
+              if (seen[ni] || !isWhite(nx, ny)) continue;
+              seen[ni] = 1; stack.push(ni);
+            }
+          }
+        }
+        if (cells.length > areaThreshold) for (const idx of cells) src.data[idx * 4 + 3] = 0;
+      }
+    }
+  }
+  // 先清白底：否则白块会挡住其下的边框线，导致边框剥离漏清；白清掉后边框暴露再剥离
+  clearWhiteBackgrounds();
   // 反复剥离：部分帧同时存在黑框 + 内层灰线；每轮重算边界，直到没有新线
   for (let pass = 0; pass < 8; pass++) {
     let changed = false;
@@ -179,6 +214,8 @@ function cleanEdgeLines(src, box) {
     }
     if (!changed) break;
   }
+  // 边框剥离后再清一次白底（边框剥离可能让新的白色区域暴露成大片）
+  clearWhiteBackgrounds();
   // 清除孤立杂点：边框清理后常残留 1~2 个独立灰点，它们会把 alphaBBox 撑大，
   // 导致角色在格子顶部/侧面出现一条线。孤立点 = 8 邻域内不透明邻居 <= 1。
   for (let y = box.y; y < box.y + box.h; y++) {
