@@ -26,6 +26,8 @@
   const NOTEBOOK_RADIUS_MUL = 3;
   // 怪物死亡演出时长（秒）：死亡时才播放受击倒地动画，演完才从场上移除。
   const DEATH_ANIM_TIME = 0.6;
+  // 场上怪物数量上限：达到上限后不再生成新怪（BOSS 生成前会先清场，不受影响）。
+  const MAX_ENEMIES = 40;
   // 角色视觉缩放：让角色可见高度 ≈ 屏幕高度的 1/10（自适应屏幕）。
   // 图集单格高 112px，其中角色可见部分约占 85%，故绘制缩放 = H / (10 × 112 × 0.85) ≈ H/952。
   const CELL_H = 112;
@@ -272,6 +274,8 @@
 
   // ---------- 生成实体 ----------
   function spawnEnemy(type, near) {
+    // 场上（含死亡演出中的）怪物达到上限则不再生成，避免无限堆积拖慢帧率。
+    if (G.enemies.length >= MAX_ENEMIES) return;
     const t = ENEMIES[type];
     let x, y;
     if (near) { x = near.x; y = near.y; }
@@ -921,7 +925,8 @@
       const lv = G.weapons.notebook, count = 2 + Math.floor(lv / 2), radius = (58 + lv * 4) * NOTEBOOK_RADIUS_MUL;
       for (let i = 0; i < count; i++) {
         const a = G.orbitAngle * 1.5 + i / count * TAU;
-        ctx.save(); ctx.translate(pl.x + Math.cos(a) * radius, pl.y - 24 * VIS + Math.sin(a) * radius * .5);
+        // 正圆环绕：绘制圆心与命中判定保持一致（以角色脚底地面点为圆心），不再压扁成椭圆。
+        ctx.save(); ctx.translate(pl.x + Math.cos(a) * radius, pl.y + Math.sin(a) * radius);
         ctx.rotate(a * 2);
         ctx.scale(NOTEBOOK_SIZE_MUL, NOTEBOOK_SIZE_MUL);
         ctx.fillStyle = '#ef5350'; ctx.fillRect(-9, -11, 18, 22);
