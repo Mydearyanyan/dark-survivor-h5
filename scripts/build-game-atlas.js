@@ -137,6 +137,9 @@ function cleanEdgeLines(src, box) {
     if (x < 0 || y < 0 || x >= src.w || y >= src.h) return 0;
     return src.data[(y * src.w + x) * 4 + 3];
   }
+  // 本帧被清掉的大块白底范围。黑框常紧贴白底；部分帧黑框外侧还有一行抗锯齿像素，
+  // 使「外侧透明」判据失效。对紧邻已清白区的宽幅均匀线，直接按边框清除。
+  let whiteRegion = null;
   function rowIsLine(y) {
     const lums = [];
     for (let x = box.x; x < box.x + box.w; x++) {
@@ -144,6 +147,8 @@ function cleanEdgeLines(src, box) {
       if (src.data[p + 3] > 40) lums.push((src.data[p] + src.data[p + 1] + src.data[p + 2]) / 3);
     }
     if (lums.length < box.w * 0.9 || spanOf(lums) >= 42) return false;
+    // 紧邻已清白区的宽幅均匀行 = 黑框，无需外侧透明判据（角色本体通常只占 bbox 一半宽，不会命中）
+    if (whiteRegion && y >= whiteRegion.y0 - 6 && y <= whiteRegion.y1 + 6) return true;
     // 外侧：离哪条 bbox 边更近就查那一侧
     const outerY = (y - box.y) < (box.y + box.h - 1 - y) ? y - 1 : y + 1;
     let outerCnt = 0;
@@ -157,6 +162,7 @@ function cleanEdgeLines(src, box) {
       if (src.data[p + 3] > 40) lums.push((src.data[p] + src.data[p + 1] + src.data[p + 2]) / 3);
     }
     if (lums.length < box.h * 0.9 || spanOf(lums) >= 42) return false;
+    if (whiteRegion && x >= whiteRegion.x0 - 6 && x <= whiteRegion.x1 + 6) return true;
     const outerX = (x - box.x) < (box.x + box.w - 1 - x) ? x - 1 : x + 1;
     let outerCnt = 0;
     for (let y = box.y; y < box.y + box.h; y++) if (alphaAt(outerX, y) > 40) outerCnt++;
@@ -191,7 +197,16 @@ function cleanEdgeLines(src, box) {
             }
           }
         }
-        if (cells.length > areaThreshold) for (const idx of cells) src.data[idx * 4 + 3] = 0;
+        if (cells.length > areaThreshold) {
+          for (const idx of cells) src.data[idx * 4 + 3] = 0;
+          const cy0 = Math.min(...cells.map(i => (i / src.w) | 0));
+          const cy1 = Math.max(...cells.map(i => (i / src.w) | 0));
+          const cx0 = Math.min(...cells.map(i => i % src.w));
+          const cx1 = Math.max(...cells.map(i => i % src.w));
+          whiteRegion = whiteRegion
+            ? { x0: Math.min(whiteRegion.x0, cx0), y0: Math.min(whiteRegion.y0, cy0), x1: Math.max(whiteRegion.x1, cx1), y1: Math.max(whiteRegion.y1, cy1) }
+            : { x0: cx0, y0: cy0, x1: cx1, y1: cy1 };
+        }
       }
     }
   }
