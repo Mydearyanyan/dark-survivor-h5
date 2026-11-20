@@ -13,8 +13,10 @@
   const dist2 = (ax, ay, bx, by) => { const dx = ax - bx, dy = ay - by; return dx * dx + dy * dy; };
   const TAU = Math.PI * 2;
   const damp = (a, b, k, dt) => a + (b - a) * Math.min(1, k * dt);
-  // 主角基础移速：普通怪(捣蛋学生 78)×1.1 ≈ 86。体育委员角色加成/风油精被动在此之上叠乘。
-  const PLAYER_BASE_SPEED = 86;
+  // 主角基础移速：135。体育委员角色加成/风油精被动在此之上叠乘。
+  const PLAYER_BASE_SPEED = 135;
+  // 受击后无敌时间（秒）：期间不再受任何伤害，角色闪烁提示。
+  const INVULN_TIME = 0.8;
   // 角色视觉缩放：让角色可见高度 ≈ 屏幕高度的 1/10（自适应屏幕）。
   // 图集单格高 112px，其中角色可见部分约占 85%，故绘制缩放 = H / (10 × 112 × 0.85) ≈ H/952。
   const CELL_H = 112;
@@ -304,7 +306,7 @@
     if (pl.invuln > 0 || G.state !== 'playing') return;
     if (pl.dodge > 0 && Math.random() < pl.dodge) { dmgText(pl.x, pl.y - 22, '闪避!', '#42a5f5'); return; }
     const v = Math.max(1, Math.round(dmg * pl.armor));
-    pl.hp -= v; pl.invuln = .75; pl.hurtT = .6;
+    pl.hp -= v; pl.invuln = INVULN_TIME; pl.hurtT = .6;
     const a = Math.atan2(pl.y - fromY, pl.x - fromX);
     pl.x += Math.cos(a) * 9; pl.y += Math.sin(a) * 9;
     dmgText(pl.x, pl.y - 26, '-' + v, '#d32f2f', 16);
