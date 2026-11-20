@@ -954,10 +954,11 @@
 
     for (const h of G.hazards) drawHazard(h);
 
-    // 敌人：按 y 排序，营造前后遮挡
-    const sorted = G.enemies.slice().sort((a, b) => a.y - b.y);
-    for (const e of sorted) {
-      if (e.boss && e.vanish > 0 && Math.floor(e.vanish * 12) % 2 === 0) continue;
+    // 角色统一按脚底 Y 排序渲染：Y 越小越先画（优先级高=在底层），Y 越大越后画盖在上层。
+    // 玩家与敌人放进同一队列，避免玩家永远浮在最前面导致的遮挡错误。
+    const pl = G.player;
+    function drawEnemy(e) {
+      if (e.boss && e.vanish > 0 && Math.floor(e.vanish * 12) % 2 === 0) return;
       shadow(e.x, e.y, e.r * .95);
       const scale = (e.boss ? 1.35 : 1.0) * VIS;
       // 只有死亡时才播受击倒地动画（hurt1~4 递进）；活着受击不再中断为受击帧。
@@ -981,14 +982,17 @@
         ctx.beginPath(); ctx.arc(e.x, e.y - 20 * VIS, e.r + 8 * VIS + Math.sin(G.t * 4) * 3 * VIS, 0, TAU); ctx.stroke();
       }
     }
-
-    // 玩家
-    const pl = G.player;
-    shadow(pl.x, pl.y, pl.r);
-    const pstate = pl.hurtT > 0 ? 'hurt' + clamp(Math.floor((.6 - pl.hurtT) / .15) + 1, 1, 4)
-      : pl.atkT > 0 ? 'attack' : pl.moving ? 'run' : 'idle';
-    const alpha = pl.invuln > 0 && Math.floor(pl.invuln * 20) % 2 ? .55 : 1;
-    drawSprite(HEROES[G.heroId].atlas, pstate, pl.dir, pl.x, pl.y, 1.05 * VIS, alpha);
+    function drawPlayer() {
+      shadow(pl.x, pl.y, pl.r);
+      const pstate = pl.hurtT > 0 ? 'hurt' + clamp(Math.floor((.6 - pl.hurtT) / .15) + 1, 1, 4)
+        : pl.atkT > 0 ? 'attack' : pl.moving ? 'run' : 'idle';
+      const alpha = pl.invuln > 0 && Math.floor(pl.invuln * 20) % 2 ? .55 : 1;
+      drawSprite(HEROES[G.heroId].atlas, pstate, pl.dir, pl.x, pl.y, 1.05 * VIS, alpha);
+    }
+    const actors = G.enemies.map(e => ({ y: e.y, kind: 0, ref: e }));
+    actors.push({ y: pl.y, kind: 1, ref: pl });
+    actors.sort((a, b) => a.y - b.y || a.kind - b.kind);
+    for (const a of actors) { if (a.kind === 0) drawEnemy(a.ref); else drawPlayer(); }
     if (G.weapons.notebook) {
       const lv = G.weapons.notebook, count = 2 + Math.floor(lv / 2), radius = (58 + lv * 4) * NOTEBOOK_RADIUS_MUL;
       for (let i = 0; i < count; i++) {
