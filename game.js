@@ -15,6 +15,10 @@
   const damp = (a, b, k, dt) => a + (b - a) * Math.min(1, k * dt);
   // 主角基础移速：普通怪(捣蛋学生 78)×1.1 ≈ 86。体育委员角色加成/风油精被动在此之上叠乘。
   const PLAYER_BASE_SPEED = 86;
+  // 角色视觉缩放：让角色可见高度 ≈ 屏幕高度的 1/10（自适应屏幕）。
+  // 图集单格高 112px，其中角色可见部分约占 85%，故绘制缩放 = H / (10 × 112 × 0.85) ≈ H/952。
+  const CELL_H = 112;
+  let VIS = 1;
 
   let W = 0, H = 0, DPR = 1;
   function resize() {
@@ -23,6 +27,7 @@
     canvas.width = W * DPR; canvas.height = H * DPR;
     canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    VIS = clamp(H / (10 * CELL_H * 0.85), 0.25, 2);
   }
   window.addEventListener('resize', resize);
   resize();
@@ -155,7 +160,7 @@
     const h = HEROES[G.heroId];
     const maxhp = Math.round(100 * (h.hpMul || 1));
     return {
-      x: 0, y: 0, r: 13, hp: maxhp, maxhp,
+      x: 0, y: 0, r: 13 * VIS, hp: maxhp, maxhp,
       speed: PLAYER_BASE_SPEED * (h.spdMul || 1), power: h.powMul || 1,
       aspd: h.aspdMul || 1, crit: .05 + (h.critBonus || 0), critDmg: 1.5,
       dodge: 0, armor: 1, pickup: 46, expMul: h.expMul || 1,
@@ -266,7 +271,7 @@
     const scale = 1 + G.time / 300;
     const hp = Math.round(t.hp * (t.boss ? 1 : scale));
     G.enemies.push({
-      type, x, y, r: t.r, hp, maxhp: hp, speed: t.speed, dmg: t.dmg, exp: t.exp,
+      type, x, y, r: t.r * VIS, hp, maxhp: hp, speed: t.speed, dmg: t.dmg, exp: t.exp,
       boss: t.boss || 0, behavior: t.behavior || 'boss', atlas: t.atlas,
       dir: 'down', hurtT: 0, atkT: 0, atkCd: rand(.5, t.atkCd || 2),
       moving: false, phase: rand(0, TAU), flash: 0, hitCd: 0,
@@ -854,22 +859,22 @@
     for (const e of sorted) {
       if (e.boss && e.vanish > 0 && Math.floor(e.vanish * 12) % 2 === 0) continue;
       shadow(e.x, e.y, e.r * .95);
-      const scale = e.boss ? 1.35 : 1.0;
+      const scale = (e.boss ? 1.35 : 1.0) * VIS;
       const state = e.hurtT > 0 ? 'hurt' + clamp(Math.floor((.6 - e.hurtT) / .15) + 1, 1, 4)
         : e.atkT > 0 ? 'attack' : e.moving ? 'run' : 'idle';
       const alpha = e.charm > 0 ? (.72 + Math.sin(G.t * 8) * .18) : 1;
       drawSprite(e.atlas, state, e.dir, e.x, e.y, scale, alpha);
       if (e.charm > 0) {
-        ctx.fillStyle = '#f06292'; ctx.font = 'bold 13px sans-serif'; ctx.textAlign = 'center';
-        ctx.fillText('♥', e.x + 16, e.y - 62 + Math.sin(G.t * 6) * 4);
+        ctx.fillStyle = '#f06292'; ctx.font = 'bold ' + Math.round(13 * VIS) + 'px sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText('♥', e.x + 16 * VIS, e.y - 62 * VIS + Math.sin(G.t * 6) * 4 * VIS);
       }
       if (e.flash > 0) {
         ctx.globalAlpha = e.flash / .12 * .35; ctx.fillStyle = '#fff';
-        ctx.beginPath(); ctx.ellipse(e.x, e.y - 34, e.r, e.r * 1.1, 0, 0, TAU); ctx.fill(); ctx.globalAlpha = 1;
+        ctx.beginPath(); ctx.ellipse(e.x, e.y - 34 * VIS, e.r, e.r * 1.1, 0, 0, TAU); ctx.fill(); ctx.globalAlpha = 1;
       }
       if (e.buffT > 0) {
         ctx.strokeStyle = 'rgba(102,187,106,.45)'; ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.arc(e.x, e.y - 20, e.r + 8 + Math.sin(G.t * 4) * 3, 0, TAU); ctx.stroke();
+        ctx.beginPath(); ctx.arc(e.x, e.y - 20 * VIS, e.r + 8 * VIS + Math.sin(G.t * 4) * 3 * VIS, 0, TAU); ctx.stroke();
       }
     }
 
@@ -879,12 +884,12 @@
     const pstate = pl.hurtT > 0 ? 'hurt' + clamp(Math.floor((.6 - pl.hurtT) / .15) + 1, 1, 4)
       : pl.atkT > 0 ? 'attack' : pl.moving ? 'run' : 'idle';
     const alpha = pl.invuln > 0 && Math.floor(pl.invuln * 20) % 2 ? .55 : 1;
-    drawSprite(HEROES[G.heroId].atlas, pstate, pl.dir, pl.x, pl.y, 1.05, alpha);
+    drawSprite(HEROES[G.heroId].atlas, pstate, pl.dir, pl.x, pl.y, 1.05 * VIS, alpha);
     if (G.weapons.notebook) {
       const lv = G.weapons.notebook, count = 2 + Math.floor(lv / 2), radius = 58 + lv * 4;
       for (let i = 0; i < count; i++) {
         const a = G.orbitAngle * 1.5 + i / count * TAU;
-        ctx.save(); ctx.translate(pl.x + Math.cos(a) * radius, pl.y - 24 + Math.sin(a) * radius * .5);
+        ctx.save(); ctx.translate(pl.x + Math.cos(a) * radius, pl.y - 24 * VIS + Math.sin(a) * radius * .5);
         ctx.rotate(a * 2);
         ctx.fillStyle = '#ef5350'; ctx.fillRect(-9, -11, 18, 22);
         ctx.fillStyle = '#fff'; ctx.fillRect(-7, -9, 14, 3); ctx.fillRect(-7, -3, 14, 2); ctx.fillRect(-7, 2, 14, 2);
