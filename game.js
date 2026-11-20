@@ -21,6 +21,9 @@
   const ENEMY_CHALK_SPEED = 150;
   // 怪物移动速度总倍率：现有速度的 0.7 倍（含 BOSS；狂暴仍在此基础上叠乘）。
   const ENEMY_SPEED_MUL = 0.7;
+  // 作业本（环绕武器）：绘制/碰撞大小为原来的 2 倍，环绕半径为现在的 3 倍。
+  const NOTEBOOK_SIZE_MUL = 2;
+  const NOTEBOOK_RADIUS_MUL = 3;
   // 角色视觉缩放：让角色可见高度 ≈ 屏幕高度的 1/10（自适应屏幕）。
   // 图集单格高 112px，其中角色可见部分约占 85%，故绘制缩放 = H / (10 × 112 × 0.85) ≈ H/952。
   const CELL_H = 112;
@@ -286,6 +289,13 @@
       charm: 0, buffT: 0, bagLeft: 0, bagT: 0, dead: false
     });
   }
+  // BOSS 出现时清空场上所有小怪（非 BOSS）：直接消散，不掉经验宝石；BOSS 本体不受影响。
+  function clearMinions() {
+    for (const e of G.enemies) {
+      if (!e.dead && !e.boss) burst(e.x, e.y, '#ffd54f', 8, 130);
+    }
+    G.enemies = G.enemies.filter(e => e.boss);
+  }
   function spawnGem(x, y, exp) {
     G.gems.push({ x, y, exp, r: 5, t: rand(0, TAU), vx: rand(-40, 40), vy: rand(-40, 40) });
   }
@@ -442,12 +452,13 @@
       }
     }
     if (G.weapons.notebook) {
-      const lv = G.weapons.notebook, count = 2 + Math.floor(lv / 2), radius = 58 + lv * 4;
+      const lv = G.weapons.notebook, count = 2 + Math.floor(lv / 2), radius = (58 + lv * 4) * NOTEBOOK_RADIUS_MUL;
       for (let i = 0; i < count; i++) {
         const a = G.orbitAngle * 1.5 + i / count * TAU;
         const bx = pl.x + Math.cos(a) * radius, by = pl.y + Math.sin(a) * radius;
         G.enemies.forEach(e => {
-          if (!e.dead && !e.charm && e.hitCd <= 0 && dist2(bx, by, e.x, e.y) < (13 + e.r) * (13 + e.r)) {
+          const hitR = 13 * NOTEBOOK_SIZE_MUL + e.r;
+          if (!e.dead && !e.charm && e.hitCd <= 0 && dist2(bx, by, e.x, e.y) < hitR * hitR) {
             damageEnemy(e, (9 + lv * 4) * pl.power * critRoll()); e.hitCd = .45;
           }
         });
@@ -610,10 +621,12 @@
       }
     }
     if (G.time >= G.nextBoss1 && !G.enemies.some(e => e.type === 'banzhuren' && !e.dead)) {
+      clearMinions();
       spawnEnemy('banzhuren', { x: G.player.x + 260, y: G.player.y - 60 });
       showToast('⚠ 班主任来了！'); G.shake = 12; Sound.boom(); G.nextBoss1 = 1e9;
     }
     if (G.time >= G.nextBoss2 && !G.enemies.some(e => e.type === 'jiaodaozhuren' && !e.dead)) {
+      clearMinions();
       spawnEnemy('jiaodaozhuren', { x: G.player.x - 280, y: G.player.y + 40 });
       showToast('⚠ 教导主任来了！'); G.shake = 14; Sound.boom(); G.nextBoss2 = 1e9;
     }
@@ -901,11 +914,12 @@
     const alpha = pl.invuln > 0 && Math.floor(pl.invuln * 20) % 2 ? .55 : 1;
     drawSprite(HEROES[G.heroId].atlas, pstate, pl.dir, pl.x, pl.y, 1.05 * VIS, alpha);
     if (G.weapons.notebook) {
-      const lv = G.weapons.notebook, count = 2 + Math.floor(lv / 2), radius = 58 + lv * 4;
+      const lv = G.weapons.notebook, count = 2 + Math.floor(lv / 2), radius = (58 + lv * 4) * NOTEBOOK_RADIUS_MUL;
       for (let i = 0; i < count; i++) {
         const a = G.orbitAngle * 1.5 + i / count * TAU;
         ctx.save(); ctx.translate(pl.x + Math.cos(a) * radius, pl.y - 24 * VIS + Math.sin(a) * radius * .5);
         ctx.rotate(a * 2);
+        ctx.scale(NOTEBOOK_SIZE_MUL, NOTEBOOK_SIZE_MUL);
         ctx.fillStyle = '#ef5350'; ctx.fillRect(-9, -11, 18, 22);
         ctx.fillStyle = '#fff'; ctx.fillRect(-7, -9, 14, 3); ctx.fillRect(-7, -3, 14, 2); ctx.fillRect(-7, 2, 14, 2);
         ctx.restore();
