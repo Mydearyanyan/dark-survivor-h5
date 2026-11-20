@@ -21,9 +21,9 @@
   const ENEMY_CHALK_SPEED = 150;
   // 怪物移动速度总倍率：现有速度的 0.7 倍（含 BOSS；狂暴仍在此基础上叠乘）。
   const ENEMY_SPEED_MUL = 0.7;
-  // 作业本（环绕武器）：绘制/碰撞大小为原来的 2 倍，环绕半径为现在的 3 倍。
+  // 作业本（环绕武器）：绘制/碰撞大小为原来的 2 倍，环绕半径调为当前的一半（3 → 1.5）。
   const NOTEBOOK_SIZE_MUL = 2;
-  const NOTEBOOK_RADIUS_MUL = 3;
+  const NOTEBOOK_RADIUS_MUL = 1.5;
   // 怪物死亡演出时长（秒）：死亡时才播放受击倒地动画，演完才从场上移除。
   const DEATH_ANIM_TIME = 0.6;
   // 场上怪物数量上限：达到上限后不再生成新怪（BOSS 生成前会先清场，不受影响）。
@@ -166,7 +166,8 @@
     spawnT: 0, nextBoss1: 300, nextBoss2: 600, bossAlive: null,
     weapons: {}, passives: {}, acc: 0, expNext: 8, rerollsLeft: 0,
     keys: {}, joy: { active: false, dx: 0, dy: 0, cx: 0, cy: 0, id: null },
-    fire: {}, orbitAngle: 0, introStep: 0
+    fire: {}, orbitAngle: 0, introStep: 0,
+    adminOpen: false, adminGod: false
   };
 
   function freshPlayer() {
@@ -191,11 +192,12 @@
   // ---------- 流程 ----------
   function show(ids) { ids.forEach(id => $(id).classList.remove('hidden')); }
   function hide(ids) { ids.forEach(id => $(id).classList.add('hidden')); }
-  const HUD_IDS = ['hud', 'pause-btn', 'mute-btn', 'joystick'];
+  const HUD_IDS = ['hud', 'pause-btn', 'mute-btn', 'admin-btn', 'joystick'];
 
   function goMenu() {
     G.state = 'menu';
-    hide(HUD_IDS.concat(['gameover', 'paused', 'levelup', 'hero-select', 'intro', 'how', 'boss-wrap']));
+    G.adminOpen = false;
+    hide(HUD_IDS.concat(['gameover', 'paused', 'levelup', 'hero-select', 'intro', 'how', 'boss-wrap', 'admin']));
     show(['menu']); refreshBest();
   }
   function openHeroSelect() { Sound.click(); G.state = 'hero-select'; hide(['menu']); show(['hero-select']); }
@@ -225,17 +227,83 @@
     G.acc = 0; G.expNext = 8; G.rerollsLeft = 0; G.fire = {};
     G.spawnT = 0; G.nextBoss1 = 300; G.nextBoss2 = 600; G.bossAlive = null;
     G.cam.x = 0; G.cam.y = 0; G.shake = 0;
-    hide(['menu', 'gameover', 'levelup', 'paused', 'how', 'hero-select', 'intro', 'boss-wrap']);
+    G.adminOpen = false; G.adminGod = false;
+    hide(['menu', 'gameover', 'levelup', 'paused', 'how', 'hero-select', 'intro', 'boss-wrap', 'admin']);
     show(HUD_IDS);
     updateHUD(); renderSkills();
     last = performance.now();
   }
 
+  // ---------- 管理员调试模式 ----------
+  function buildAdminPanel() {
+    // 技能：武器 + 被动
+    const sbox = $('adm-skills'); sbox.innerHTML = '';
+    const addSkillItem = (key, s, lv, max, kind) => {
+      const full = lv >= max;
+      const d = document.createElement('div');
+      d.className = 'adm-item' + (full ? ' max' : '');
+      d.innerHTML = '<span class="ai">' + s.icon + '</span>' + s.name + '<span class="alv">Lv.' + lv + '/' + max + '</span>';
+      if (!full) d.onclick = () => {
+        Sound.click();
+        applyPick({ kind, key });   // 复用正式升级逻辑，被动属性即时生效
+        buildAdminPanel();
+      };
+      sbox.appendChild(d);
+    };
+    for (const k in WEAPONS) addSkillItem(k, WEAPONS[k], G.weapons[k] || 0, WEAPONS[k].max, 'weapon');
+    for (const k in PASSIVES) addSkillItem(k, PASSIVES[k], G.passives[k] || 0, PASSIVES[k].max, 'passive');
+
+    // 怪物：点击在主角附近生成
+    const ebox = $('adm-enemies'); ebox.innerHTML = '';
+    for (const k in ENEMIES) {
+      const en = ENEMIES[k];
+      const d = document.createElement('div'); d.className = 'adm-item';
+      d.innerHTML = '<span class="ai">👾</span>' + en.name;
+      d.onclick = () => {
+        Sound.click();
+        const a = rand(0, TAU), dist = rand(90, 170);
+        spawnEnemy(k, { x: G.player.x + Math.cos(a) * dist, y: G.player.y + Math.sin(a) * dist });
+        showToast('已调出：' + en.name);
+      };
+      ebox.appendChild(d);
+    }
+
+    // 快捷调试
+    const tbox = $('adm-tools'); tbox.innerHTML = '';
+    const addTool = (label, fn, on) => {
+      const d = document.createElement('div'); d.className = 'adm-item' + (on ? ' on' : '');
+      d.textContent = label; d.onclick = () => { Sound.click(); fn(); buildAdminPanel(); };
+      tbox.appendChild(d);
+    };
+    addTool('💚 回满血', () => { G.player.hp = G.player.maxhp; updateHUD(); });
+    addTool('⭐ +1 级', () => gainExp(G.expNext - G.acc + 1));
+    addTool('💥 清空怪物', () => { G.enemies.length = 0; });
+    addTool('🛡 无敌 ' + (G.adminGod ? '开' : '关'), () => { G.adminGod = !G.adminGod; showToast(G.adminGod ? '无敌：开' : '无敌：关'); }, G.adminGod);
+    addTool('⏩ 跳到5分钟(BOSS)', () => { G.time = Math.max(G.time, 299); showToast('时间→5:00'); });
+    addTool('📕 全技能拉满', () => {
+      for (const k in WEAPONS) while ((G.weapons[k] || 0) < WEAPONS[k].max) applyPick({ kind: 'weapon', key: k });
+      for (const k in PASSIVES) while ((G.passives[k] || 0) < PASSIVES[k].max) applyPick({ kind: 'passive', key: k });
+      showToast('技能已拉满');
+    });
+    addTool('🏫 召唤班主任', () => { spawnEnemy('banzhuren', { x: G.player.x + 180, y: G.player.y }); showToast('班主任来了'); });
+    addTool('🏫 召唤教导主任', () => { spawnEnemy('jiaodaozhuren', { x: G.player.x - 180, y: G.player.y }); showToast('教导主任来了'); });
+  }
+  function openAdmin() {
+    if (G.state !== 'playing') return;
+    G.adminOpen = true; buildAdminPanel(); show(['admin']);
+  }
+  function closeAdmin() {
+    G.adminOpen = false; hide(['admin']); last = performance.now();
+  }
+  function toggleAdmin() { if (G.adminOpen) closeAdmin(); else openAdmin(); }
+
   // ---------- 输入 ----------
   window.addEventListener('keydown', e => {
     const k = e.key.toLowerCase();
     G.keys[k] = true;
-    if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(k)) e.preventDefault();
+    if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' ', 'f2'].includes(k)) e.preventDefault();
+    if (k === 'f2') { toggleAdmin(); return; }
+    if (G.adminOpen) return;
     if (G.state === 'intro') { introNext(); return; }
     if (k === 'p' || k === 'escape') { if (G.state === 'playing') pause(); else if (G.state === 'paused') resume(); }
   });
@@ -323,7 +391,7 @@
   // ---------- 伤害 ----------
   function playerDamage(dmg, fromX, fromY) {
     const pl = G.player;
-    if (pl.invuln > 0 || G.state !== 'playing') return;
+    if (G.adminGod || pl.invuln > 0 || G.state !== 'playing') return;
     if (pl.dodge > 0 && Math.random() < pl.dodge) { dmgText(pl.x, pl.y - 22, '闪避!', '#42a5f5'); return; }
     const v = Math.max(1, Math.round(dmg * pl.armor));
     pl.hp -= v; pl.invuln = INVULN_TIME; pl.hurtT = .6;
@@ -1079,7 +1147,8 @@
     $('final-level').textContent = G.level;
     $('broadcast').textContent = broadcast(win);
     $('newrecord').classList.toggle('hidden', !isRecord);
-    hide(HUD_IDS.concat(['boss-wrap']));
+    G.adminOpen = false;
+    hide(HUD_IDS.concat(['boss-wrap', 'admin']));
     show(['gameover']); refreshBest();
   }
   function refreshBest() { const b = loadBest(); $('best-time').textContent = fmtTime(b.time); $('best-kills').textContent = b.kills; }
@@ -1097,6 +1166,8 @@
   $('resume-btn').onclick = () => { Sound.click(); resume(); };
   $('pause-btn').onclick = () => { Sound.click(); pause(); };
   $('mute-btn').onclick = () => { Sound.muted = !Sound.muted; $('mute-btn').textContent = Sound.muted ? '🔇' : '🔊'; };
+  $('admin-btn').onclick = () => { Sound.click(); toggleAdmin(); };
+  $('admin-close').onclick = () => { Sound.click(); closeAdmin(); };
 
   // 角色选择卡
   const cardBox = $('hero-cards');
@@ -1132,11 +1203,11 @@
   function loop(now) {
     let dt = (now - last) / 1000; last = now;
     if (dt > .05) dt = .05;
-    if (G.state === 'playing') update(dt);
+    if (G.state === 'playing' && !G.adminOpen) update(dt);
     render();
     requestAnimationFrame(loop);
   }
   refreshBest();
-  window.__CAMPUS_DEBUG = { IMG, ATL, G, spawnEnemy, damageEnemy, gainExp };
+  window.__CAMPUS_DEBUG = { IMG, ATL, G, spawnEnemy, damageEnemy, gainExp, openAdmin, closeAdmin, toggleAdmin, buildAdminPanel, WEAPONS, PASSIVES, ENEMIES };
   requestAnimationFrame(loop);
 })();

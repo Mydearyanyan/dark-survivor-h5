@@ -83,6 +83,23 @@
   #pause-btn,#mute-btn { position:absolute; right:12px; z-index:6; width:38px; height:38px; border-radius:10px; background:rgba(255,253,245,.85); border:1px solid rgba(30,60,90,.35); color:#234a72; font-size:16px; cursor:pointer; box-shadow:0 2px 6px rgba(0,0,0,.12); }
   #pause-btn { top:calc(40px + env(safe-area-inset-top)); }
   #mute-btn { top:calc(84px + env(safe-area-inset-top)); }
+  #admin-btn { top:calc(128px + env(safe-area-inset-top)); background:rgba(255,243,205,.92); color:#7a5b00; border-color:rgba(120,90,30,.45); font-size:17px; }
+
+  /* 管理员调试面板 */
+  #admin { z-index:15; }
+  #admin .panel { width:min(96vw,720px); max-height:86vh; overflow-y:auto; text-align:left; padding:18px 20px; }
+  #admin .title { font-size:22px; color:#37474f; text-shadow:1px 1px 0 #fff; margin-bottom:2px; }
+  .adm-sec { margin-top:13px; }
+  .adm-sec h4 { font-size:12px; color:#1565c0; margin-bottom:7px; border-bottom:1px dashed #b0c4d8; padding-bottom:4px; }
+  .adm-grid { display:flex; flex-wrap:wrap; gap:6px; }
+  .adm-item { display:flex; align-items:center; gap:5px; background:#fff; border:1px solid #c8d9e6; border-radius:9px; padding:6px 9px; cursor:pointer; font-size:12px; color:#234a72; font-weight:700; transition:transform .08s,border-color .12s,background .12s; }
+  .adm-item:hover { background:#eef7ff; border-color:#4aa3e8; }
+  .adm-item:active { transform:scale(.94); }
+  .adm-item .ai { font-size:16px; }
+  .adm-item .alv { font-size:10px; color:#e65100; font-weight:800; }
+  .adm-item.max { opacity:.5; cursor:default; }
+  .adm-tools .adm-item { background:#fff8e1; border-color:#e6c26a; color:#6d4c00; }
+  .adm-tools .adm-item.on { background:#c8e6c9; border-color:#66bb6a; color:#1b5e20; }
 
   /* 虚拟摇杆 */
   #joystick { position:absolute; z-index:6; left:0; bottom:0; width:100%; height:45%; pointer-events:none; }
@@ -107,6 +124,7 @@
 </div>
 <button id="pause-btn" class="hidden">⏸</button>
 <button id="mute-btn" class="hidden">🔊</button>
+<button id="admin-btn" class="hidden" title="管理员模式 (F2)">🛠</button>
 <div id="skills"></div>
 <div id="joystick" class="hidden"><div id="joy-base"></div><div id="joy-knob"></div></div>
 <div id="toast"><span></span></div>
@@ -168,6 +186,18 @@
     <div class="title" style="font-size:26px;color:#1565c0">课间休息</div>
     <button class="btn" id="resume-btn">继续战斗</button>
     <div class="row"><button class="btn ghost small" id="quit-btn">返回主菜单</button></div>
+  </div>
+</div>
+
+<!-- 管理员调试模式 -->
+<div id="admin" class="overlay hidden">
+  <div class="panel">
+    <div class="title">🛠 管理员模式</div>
+    <div class="subtitle" style="margin-bottom:6px">调试专用 · 打开时游戏冻结 · 再按 F2 或点关闭返回战斗</div>
+    <div class="adm-sec"><h4>武器 / 被动（点一下 +1 级）</h4><div class="adm-grid" id="adm-skills"></div></div>
+    <div class="adm-sec"><h4>调出怪物（在主角附近生成）</h4><div class="adm-grid" id="adm-enemies"></div></div>
+    <div class="adm-sec"><h4>快捷调试</h4><div class="adm-grid adm-tools" id="adm-tools"></div></div>
+    <div class="row"><button class="btn ghost small" id="admin-close">关闭并返回战斗</button></div>
   </div>
 </div>
 
