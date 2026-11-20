@@ -456,7 +456,9 @@
       G.fire.pointer = (G.fire.pointer || 0) - dt;
       if (G.fire.pointer <= 0) {
         G.fire.pointer = Math.max(.85, 2.0 - lv * .15) / pl.aspd;
-        const a = DIRS8.indexOf(pl.dir) * Math.PI / 4;
+        // 优先朝最近的敌人横扫，无敌人时沿面朝方向
+        const near = nearestEnemies(1)[0];
+        const a = near ? Math.atan2(near.y - pl.y, near.x - pl.x) : DIRS8.indexOf(pl.dir) * Math.PI / 4;
         const R = 72 + lv * 8;
         let hit = false;
         G.enemies.forEach(e => {
@@ -475,7 +477,9 @@
       G.fire.basketball = (G.fire.basketball || 0) - dt;
       if (G.fire.basketball <= 0) {
         G.fire.basketball = Math.max(1.3, 3.2 - lv * .2) / pl.aspd;
-        const a = rand(0, TAU);
+        // 优先落在最近的敌人附近，无敌人时才随机方向
+        const near = nearestEnemies(1)[0];
+        const a = near ? Math.atan2(near.y - pl.y, near.x - pl.x) : rand(0, TAU);
         G.hazards.push({ type: 'ball', x: pl.x + Math.cos(a) * 90, y: pl.y + Math.sin(a) * 90,
           r: 48 + lv * 6, life: .65, max: .65, dmg: (14 + lv * 6) * pl.power, hits: [] });
         Sound.tone(180, .12, 'sine', .04, 90);
