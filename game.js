@@ -24,6 +24,8 @@
   // 作业本（环绕武器）：绘制/碰撞大小为原来的 2 倍，环绕半径为现在的 3 倍。
   const NOTEBOOK_SIZE_MUL = 2;
   const NOTEBOOK_RADIUS_MUL = 3;
+  // 怪物死亡演出时长（秒）：死亡时才播放受击倒地动画，演完才从场上移除。
+  const DEATH_ANIM_TIME = 0.6;
   // 角色视觉缩放：让角色可见高度 ≈ 屏幕高度的 1/10（自适应屏幕）。
   // 图集单格高 112px，其中角色可见部分约占 85%，故绘制缩放 = H / (10 × 112 × 0.85) ≈ H/952。
   const CELL_H = 112;
@@ -286,7 +288,7 @@
       moving: false, phase: rand(0, TAU), flash: 0, hitCd: 0,
       chargeT: 0, chargeVX: 0, chargeVY: 0, vanish: 0,
       skillT: t.skillCd || 8, skillIdx: 0, enraged: false,
-      charm: 0, buffT: 0, bagLeft: 0, bagT: 0, dead: false
+      charm: 0, buffT: 0, bagLeft: 0, bagT: 0, dead: false, deathT: 0
     });
   }
   // BOSS 出现时清空场上所有小怪（非 BOSS）：直接消散，不掉经验宝石；BOSS 本体不受影响。
@@ -330,11 +332,13 @@
   function damageEnemy(e, dmg, crit) {
     if (e.dead) return;
     const v = Math.max(1, Math.round(dmg));
-    e.hp -= v; e.hurtT = .6; e.flash = .12;
+    e.hp -= v;
+    if (e.hp > 0) { e.flash = .12; } // 活着受击只闪白，不播受击动画（受击动画只在死亡时演出）
     dmgText(e.x + rand(-7, 7), e.y - e.r - 12, v, crit ? '#ffca28' : '#fff', crit ? 18 : 14);
     if (crit) burst(e.x, e.y - 8, '#ffca28', 5, 90);
     if (e.hp <= 0) {
       e.dead = true;
+      e.deathT = DEATH_ANIM_TIME; // 死亡瞬间启动受击倒地演出，演完才移除
       if (e.charm <= 0) { G.kills++; spawnGem(e.x, e.y, e.exp); }
       burst(e.x, e.y - 8, e.color, e.boss ? 34 : 8, e.boss ? 260 : 130);
       if (e.boss) {
@@ -647,16 +651,12 @@
 
     // 敌人 AI
     for (const e of G.enemies) {
-      if (e.dead) continue;
+      if (e.dead) { e.deathT = Math.max(0, e.deathT - dt); continue; } // 死亡怪只递减演出计时，不行动
       e.flash = Math.max(0, e.flash - dt);
       e.hitCd = Math.max(0, e.hitCd - dt);
       if (e.atkT > 0) e.atkT -= dt;
       if (e.charm > 0) e.charm -= dt;
       if (e.buffT > 0) e.buffT -= dt;
-      if (e.hurtT > 0) {
-        e.hurtT -= dt; e.moving = false;
-        continue; // 受击 4 帧递进演出期间不行动
-      }
       if (e.boss && !e.enraged && e.hp / e.maxhp < .3) {
         e.enraged = true; e.speed *= 1.3; e.skillT *= .5;
         showToast('🔥 ' + ENEMIES[e.type].name + ' 狂暴了！'); G.shake = 10; Sound.boom();
@@ -757,7 +757,7 @@
         }
       }
     }
-    G.enemies = G.enemies.filter(e => !e.dead);
+    G.enemies = G.enemies.filter(e => !e.dead || e.deathT > 0);
 
     updateWeapons(dt);
 
@@ -888,9 +888,13 @@
       if (e.boss && e.vanish > 0 && Math.floor(e.vanish * 12) % 2 === 0) continue;
       shadow(e.x, e.y, e.r * .95);
       const scale = (e.boss ? 1.35 : 1.0) * VIS;
-      const state = e.hurtT > 0 ? 'hurt' + clamp(Math.floor((.6 - e.hurtT) / .15) + 1, 1, 4)
+      // 只有死亡时才播受击倒地动画（hurt1~4 递进）；活着受击不再中断为受击帧。
+      const state = e.dead
+        ? 'hurt' + clamp(Math.floor((DEATH_ANIM_TIME - e.deathT) / (DEATH_ANIM_TIME / 4)) + 1, 1, 4)
         : e.atkT > 0 ? 'attack' : e.moving ? 'run' : 'idle';
-      const alpha = e.charm > 0 ? (.72 + Math.sin(G.t * 8) * .18) : 1;
+      // 死亡演出后半段逐渐淡出；魅惑怪保持闪烁。
+      const alpha = e.dead ? clamp(e.deathT / (DEATH_ANIM_TIME * .5), 0, 1)
+        : e.charm > 0 ? (.72 + Math.sin(G.t * 8) * .18) : 1;
       drawSprite(e.atlas, state, e.dir, e.x, e.y, scale, alpha);
       if (e.charm > 0) {
         ctx.fillStyle = '#f06292'; ctx.font = 'bold ' + Math.round(13 * VIS) + 'px sans-serif'; ctx.textAlign = 'center';
