@@ -13,6 +13,8 @@
   const dist2 = (ax, ay, bx, by) => { const dx = ax - bx, dy = ay - by; return dx * dx + dy * dy; };
   const TAU = Math.PI * 2;
   const damp = (a, b, k, dt) => a + (b - a) * Math.min(1, k * dt);
+  // 主角基础移速：普通怪(捣蛋学生 78)×1.1 ≈ 86。体育委员角色加成/风油精被动在此之上叠乘。
+  const PLAYER_BASE_SPEED = 86;
 
   let W = 0, H = 0, DPR = 1;
   function resize() {
@@ -154,7 +156,7 @@
     const maxhp = Math.round(100 * (h.hpMul || 1));
     return {
       x: 0, y: 0, r: 13, hp: maxhp, maxhp,
-      speed: 132 * (h.spdMul || 1), power: h.powMul || 1,
+      speed: PLAYER_BASE_SPEED * (h.spdMul || 1), power: h.powMul || 1,
       aspd: h.aspdMul || 1, crit: .05 + (h.critBonus || 0), critDmg: 1.5,
       dodge: 0, armor: 1, pickup: 46, expMul: h.expMul || 1,
       regen: h.regen || 0,
@@ -385,7 +387,7 @@
       const pl = G.player, lv = G.passives[p.key];
       switch (p.key) {
         case 'power': pl.power = 1 + lv * .2; break;
-        case 'speed': pl.speed = 132 * (HEROES[G.heroId].spdMul || 1) * (1 + lv * .12); break;
+        case 'speed': pl.speed = PLAYER_BASE_SPEED * (HEROES[G.heroId].spdMul || 1) * (1 + lv * .12); break;
         case 'medkit': pl.regen += 1.2; break;
         case 'glasses': pl.crit += .08; break;
         case 'calculator': pl.expMul = (HEROES[G.heroId].expMul || 1) * (1 + lv * .18); break;
