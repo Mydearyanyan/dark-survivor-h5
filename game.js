@@ -17,6 +17,8 @@
   const PLAYER_BASE_SPEED = 135;
   // 受击后无敌时间（秒）：期间不再受任何伤害，角色闪烁提示。
   const INVULN_TIME = 0.8;
+  // 老师粉笔弹道速度：原来的 0.6 倍（250 → 150），飞行更慢、更易看清躲避。
+  const ENEMY_CHALK_SPEED = 150;
   // 角色视觉缩放：让角色可见高度 ≈ 屏幕高度的 1/10（自适应屏幕）。
   // 图集单格高 112px，其中角色可见部分约占 85%，故绘制缩放 = H / (10 × 112 × 0.85) ≈ H/952。
   const CELL_H = 112;
@@ -187,7 +189,7 @@
     hide(HUD_IDS.concat(['gameover', 'paused', 'levelup', 'hero-select', 'intro', 'how', 'boss-wrap']));
     show(['menu']); refreshBest();
   }
-  function openHeroSelect() { Sound.click(); hide(['menu']); show(['hero-select']); }
+  function openHeroSelect() { Sound.click(); G.state = 'hero-select'; hide(['menu']); show(['hero-select']); }
   function pickHero(id) {
     G.heroId = id; Sound.click(); hide(['hero-select']);
     G.introStep = 0; G.state = 'intro';
@@ -702,8 +704,8 @@
           e.atkCd -= dt;
           if (e.atkCd <= 0 && d < 300) {
             e.atkCd = t.atkCd; e.atkT = .35;
-            fireBullet({ x: e.x, y: e.y, vx: dx / d * 250, vy: dy / d * 250,
-              r: 5, dmg: e.dmg, life: 2, color: '#fff', kind: 'enemy', friendly: false });
+            fireBullet({ x: e.x, y: e.y, vx: dx / d * ENEMY_CHALK_SPEED, vy: dy / d * ENEMY_CHALK_SPEED,
+              r: 5, dmg: e.dmg, life: 2.6, color: '#fff', kind: 'enemy', friendly: false });
           }
         } else if (e.behavior === 'healer') {
           if (d > 130) { e.x += dx / d * e.speed * dt; e.y += dy / d * e.speed * dt; e.moving = true; }
@@ -917,6 +919,14 @@
       } else if (b.kind === 'eraser') {
         ctx.fillStyle = '#546e7a'; ctx.fillRect(-12, -8, 24, 16);
         ctx.fillStyle = '#cfd8dc'; ctx.fillRect(-12, -8, 24, 5);
+      } else if (b.kind === 'enemy') {
+        // 老师的粉笔：白色本体 + 醒目红色描边 + 红色微光，方便看清躲避
+        ctx.shadowColor = '#e53935'; ctx.shadowBlur = 9;
+        ctx.fillStyle = '#fff'; ctx.strokeStyle = '#d32f2f'; ctx.lineWidth = 2.6;
+        ctx.beginPath(); ctx.arc(0, 0, b.r, 0, TAU); ctx.fill(); ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = 'rgba(211,47,47,.55)'; ctx.lineWidth = 1.4;
+        ctx.beginPath(); ctx.arc(0, 0, b.r + 3.5, 0, TAU); ctx.stroke();
       } else {
         ctx.fillStyle = b.color; ctx.shadowColor = b.color; ctx.shadowBlur = 7;
         ctx.beginPath(); ctx.arc(0, 0, b.r, 0, TAU); ctx.fill(); ctx.shadowBlur = 0;
